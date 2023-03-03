@@ -1,0 +1,5 @@
+(library
+ (name test_inferior)
+ (libraries async core)
+ (preprocess
+  (pps ppx_jane)))

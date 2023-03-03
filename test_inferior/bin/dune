@@ -1,0 +1,6 @@
+(executable
+ (public_name test_inferior)
+ (name main)
+ (libraries core_unix.command_unix test_inferior)
+ (preprocess
+  (pps ppx_jane)))
