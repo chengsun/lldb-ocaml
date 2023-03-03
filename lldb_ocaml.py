@@ -54,11 +54,7 @@ class OCamlInfo(common.OCamlInfoBase):
         buf = target.process.ReadMemory(address, self.bytes, error)
         if error.Fail():
             raise common.ReadWordError(error)
-        if self.bits == 32:
-            (word,) = struct.unpack("I", buf)
-        elif self.bits == 64:
-            (word,) = struct.unpack("Q", buf)
-        return word
+        return self.UnpackWord(buf)
 
 
 def print_value(debugger, command, exe_ctx, result, internal_dict):

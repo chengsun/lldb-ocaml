@@ -54,15 +54,32 @@ class OCamlTag(object):
             return str(self.named_value)
         return str(self.value)
 
-class OCamlBlock(object):
-    def __init__(self, ocaml_info, header_word):
+class OCamlBlockHeader(object):
+    def __init__(self, header_word):
         self.header_word = header_word
         self.tag_byte = OCamlTag(self.header_word & 0xFF)
         self.color = (self.header_word >> 8) & 0x3
         self.size_in_words = (self.header_word >> 10)
 
+    @classmethod
+    def from_parts(cls, tag_byte, color, size_in_words):
+        assert 0x0 <= color < 0x4
+        assert 0x0 <= tag_byte < 0xFF
+        header_word = (size_in_words << 10) | (color << 8) | tag_byte
+        _self = cls(header_word)
+        assert _self.header_word == header_word
+        return _self
+
     def __str__(self):
         return "<block tag={} color={} size={}>".format(self.tag_byte, self.color, self.size_in_words)
+
+class OCamlStringBlock(object):
+    def __init__(self, ocaml_info, string):
+        size_in_words = len(string) // 8 + 1
+        self.header = OCamlBlockHeader.from_parts(OCamlTagNamed.STRING, 0, size_in_words)
+        padding = b"\x00" * (size_in_words * 8 - len(string))
+        padding[-1] = bytearray((len(padding) - 1,))
+        self.data = ocaml_info.PackWord(self.header) + string + padding
 
 class OCamlValue(object):
     def __init__(self, word):
@@ -73,7 +90,7 @@ class OCamlValue(object):
     def GetInteger(self): return (self.word >> 1)
     def DereferencePointer(self, ocaml_info):
         header_word = ocaml_info.ReadWord(self.word)
-        return OCamlBlock(ocaml_info, header_word)
+        return OCamlBlockHeader(header_word)
 
     def __str__(self):
         if self.IsInteger():
@@ -92,6 +109,22 @@ class OCamlInfoBase(object):
         bits = self.GetWordSize()
         if not (bits == 32 or bits == 64):
             raise RuntimeError("Unknown system word bits: {}".format(self.bits))
+
+    def PackWord(self, word):
+        bits = self.GetWordSize()
+        if bits == 32:
+            buf = struct.pack("I", word)
+        elif bits == 64:
+            buf = struct.pack("Q", word)
+        return buf
+
+    def UnpackWord(self, buf):
+        bits = self.GetWordSize()
+        if bits == 32:
+            (word,) = struct.unpack("I", buf)
+        elif bits == 64:
+            (word,) = struct.unpack("Q", buf)
+        return word
 
     def GetWordSize(self):
         """Returns Sys.word_size (32 or 64)"""
