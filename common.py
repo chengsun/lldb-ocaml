@@ -25,7 +25,7 @@ def reload(module):
     # Python 2
     reload(module)
 
-class OCamlTagNamed(enum.Enum):
+class OCamlTagNamed(enum.IntEnum):
     FORCING = 244
     CONT = 245
     LAZY = 246
@@ -54,6 +54,12 @@ class OCamlTag(object):
             return str(self.named_value)
         return str(self.value)
 
+class OCamlColor(enum.IntEnum):
+    WHITE = 0
+    GRAY = 1
+    BLUE = 2
+    BLACK = 3
+
 class OCamlBlockHeader(object):
     def __init__(self, header_word):
         self.header_word = header_word
@@ -63,8 +69,8 @@ class OCamlBlockHeader(object):
 
     @classmethod
     def from_parts(cls, tag_byte, color, size_in_words):
-        assert 0x0 <= color < 0x4
         assert 0x0 <= tag_byte < 0xFF
+        color = OCamlColor(color)
         header_word = (size_in_words << 10) | (color << 8) | tag_byte
         _self = cls(header_word)
         assert _self.header_word == header_word
@@ -74,12 +80,14 @@ class OCamlBlockHeader(object):
         return "<block tag={} color={} size={}>".format(self.tag_byte, self.color, self.size_in_words)
 
 class OCamlStringBlock(object):
-    def __init__(self, ocaml_info, string):
+    def __init__(self, ocaml_info, string, color):
+        if isinstance(string, str):
+            string = string.encode('utf-8')
         size_in_words = len(string) // 8 + 1
-        self.header = OCamlBlockHeader.from_parts(OCamlTagNamed.STRING, 0, size_in_words)
-        padding = b"\x00" * (size_in_words * 8 - len(string))
-        padding[-1] = bytearray((len(padding) - 1,))
-        self.data = ocaml_info.PackWord(self.header) + string + padding
+        self.header = OCamlBlockHeader.from_parts(OCamlTagNamed.STRING, color, size_in_words)
+        padding_length = size_in_words * 8 - len(string)
+        padding = (b"\x00" * (padding_length - 1)) + bytearray((padding_length - 1,))
+        self.data = ocaml_info.PackWord(self.header.header_word) + string + padding
 
 class OCamlValue(object):
     def __init__(self, word):
@@ -106,6 +114,7 @@ class EvaluateExpressionError(BaseException):
 
 class OCamlInfoBase(object):
     def __init__(self):
+        """Should be called by the subclass *after* specific initialization."""
         bits = self.GetWordSize()
         if not (bits == 32 or bits == 64):
             raise RuntimeError("Unknown system word bits: {}".format(self.bits))
