@@ -95,9 +95,17 @@ class OCamlValue(object):
 
     def IsPointer(self): return (self.word & 1) == 0
     def IsInteger(self): return (self.word & 1) == 1
-    def GetInteger(self): return (self.word >> 1)
+
+    def GetInteger(self):
+        assert self.IsInteger()
+        return (self.word >> 1)
+
+    def GetPointer(self):
+        assert self.IsPointer()
+        return self.word
+
     def DereferencePointer(self, ocaml_info):
-        header_word = ocaml_info.ReadWord(self.word)
+        header_word = ocaml_info.ReadWord(self.GetPointer())
         return OCamlBlockHeader(header_word)
 
     def __str__(self):
@@ -110,6 +118,9 @@ class ReadWordError(BaseException):
     pass
 
 class EvaluateExpressionError(BaseException):
+    pass
+
+class ResolveLoadAddressError(BaseException):
     pass
 
 class OCamlInfoBase(object):
@@ -149,6 +160,11 @@ class OCamlInfoBase(object):
         May raise EvaluateExpressionError"""
         raise NotImplementedError()
 
+    def ResolveLoadAddress(self, address):
+        """Resolves a load address and returns an ???
+        May raise ResolveLoadAddressError"""
+        raise NotImplementedError()
+
 def print_value(ocaml_info, command):
     try:
         value = ocaml_info.EvaluateExpressionAsValue(command)
@@ -160,6 +176,9 @@ def print_value(ocaml_info, command):
         print("{}".format(value))
     else:
         try:
-            print("{} -> {}".format(value, value.DereferencePointer(ocaml_info)))
-        except ReadWordError:
-            print("{} -> (couldn't dereference)".format(value))
+            print("{} --> {}".format(value, ocaml_info.ResolveLoadAddress(value)))
+        except ResolveLoadAddressError:
+            try:
+                print("{} -> {}".format(value, value.DereferencePointer(ocaml_info)))
+            except ReadWordError:
+                print("{} -> (couldn't dereference)".format(value))

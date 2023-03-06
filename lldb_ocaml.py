@@ -56,6 +56,29 @@ class OCamlInfo(common.OCamlInfoBase):
             raise common.ReadWordError(error)
         return self.UnpackWord(buf)
 
+    def ResolveLoadAddress(self, address):
+        target = self.debugger.GetSelectedTarget()
+        address = address.GetPointer()
+
+        resolved_address = target.ResolveLoadAddress(address)
+        #symbol_context = address.GetSymbolContext(lldb.eSymbolContextEverything)
+        symbol_context = resolved_address.GetSymbolContext(lldb.eSymbolContextSymbol | lldb.eSymbolContextModule)
+        symbol = symbol_context.GetSymbol()
+        module = symbol_context.GetModule()
+        if symbol.IsValid():
+            name = symbol.GetName()
+            offset = address - symbol.GetStartAddress().GetLoadAddress(target)
+            if offset == 0:
+                return name
+            else:
+                return "{}+{}".format(name, offset)
+        elif module.IsValid():
+            filename = module.GetFileSpec().GetFilename()
+            return "{}+?".format(filename)
+        else:
+            raise common.ResolveLoadAddressError()
+
+
 
 def print_value(debugger, command, exe_ctx, result, internal_dict):
     """Print a value"""
